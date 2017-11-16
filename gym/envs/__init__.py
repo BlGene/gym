@@ -507,3 +507,30 @@ register(
     entry_point='gym.envs.safety:OffSwitchCartpoleProbEnv',
     max_episode_steps=200,
 )
+
+# Doom Scenarios
+# ----------------------------------------
+
+register(
+    id='HealthGatheringEasy-v1',
+    entry_point='gym.envs.doom:DoomEnv',
+    kwargs={'game': 'HealthGatheringEasy', 'obs_type': 'image_color', 'frameskip': 4},
+    max_episode_steps=2100,
+    nondeterministic=False,
+)
+
+register(
+    id='HealthGatheringSparse-v1',
+    entry_point='gym.envs.doom:DoomEnv',
+    kwargs={'game': 'HealthGatheringSparse', 'obs_type': 'image_color', 'frameskip': 4},
+    max_episode_steps=2100,
+    nondeterministic=False,
+)
+
+register(
+    id='LabyrinthMonsters-v1',
+    entry_point='gym.envs.doom:DoomEnv',
+    kwargs={'game': 'LabyrinthMonsters', 'obs_type': 'image_color','frameskip': 4},
+    max_episode_steps=2100,
+    nondeterministic=False,
+)

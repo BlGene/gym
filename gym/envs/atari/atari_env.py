@@ -119,7 +119,6 @@ class AtariEnv(gym.Env, utils.EzPickle):
             self.viewer.imshow(img)
 
     def get_action_meanings(self):
-        print (self._action_set)
         return [ACTION_MEANING[i] for i in self._action_set]
 
     def get_keys_to_action(self):
