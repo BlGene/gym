@@ -4,13 +4,13 @@ import sys
 import time
 import matplotlib
 try:
-    matplotlib.use('GTK3Agg')
+    #matplotlib.use('GTK3Agg')
     import matplotlib.pyplot as plt
 except Exception:
     pass
 
 
-import pyglet.window as pw
+#import pyglet.window as pw
 
 from collections import deque
 from pygame.locals import HWSURFACE, DOUBLEBUF, RESIZABLE, VIDEORESIZE
@@ -23,7 +23,7 @@ def display_arr(screen, arr, video_size, transpose):
     pyg_img = pygame.transform.scale(pyg_img, video_size)
     screen.blit(pyg_img, (0,0))
 
-def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=None):
+def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=None, policy=None):
     """Allows one to play the game using keyboard.
 
     To simply play the game use:
@@ -82,9 +82,12 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
 
     obs_s = env.observation_space
     assert type(obs_s) == gym.spaces.box.Box
-    assert len(obs_s.shape) == 2 or (len(obs_s.shape) == 3 and obs_s.shape[2] in [1,3])
+    assert len(obs_s.shape) == 2 or (len(obs_s.shape) == 3 and obs_s.shape[2] in [1,3]) , "shape was {}".format(obs_s.shape)
 
-    if keys_to_action is None:
+    if policy:
+        # don't require keys to action
+        relevant_keys = set()
+    elif keys_to_action is None:
         if hasattr(env, 'get_keys_to_action'):
             keys_to_action = env.get_keys_to_action()
         elif hasattr(env.unwrapped, 'get_keys_to_action'):
@@ -92,7 +95,7 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
         else:
             assert False, env.spec.id + " does not have explicit key to action mapping, " + \
                           "please specify one manually"
-    relevant_keys = set(sum(map(list, keys_to_action.keys()),[]))
+        relevant_keys = set(sum(map(list, keys_to_action.keys()),[]))
 
     if transpose:
         video_size = env.observation_space.shape[1], env.observation_space.shape[0]
@@ -109,17 +112,90 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
     screen = pygame.display.set_mode(video_size)
     clock = pygame.time.Clock()
 
-
     while running:
         if env_done:
             env_done = False
             obs = env.reset()
         else:
-            action = keys_to_action[tuple(sorted(pressed_keys))]
+            if policy:
+                action = policy(env)
+            else:
+                action = keys_to_action[tuple(sorted(pressed_keys))]
             prev_obs = obs
             obs, rew, env_done, info = env.step(action)
             if callback is not None:
                 callback(prev_obs, obs, action, rew, env_done, info)
+        if obs is not None:
+            if len(obs.shape) == 2:
+                obs = obs[:, :, None]
+            if obs.shape[2] == 1:
+                obs = obs.repeat(3, axis=2)
+            display_arr(screen, obs, transpose=transpose, video_size=video_size)
+
+        # process pygame events
+        for event in pygame.event.get():
+            # test events, set key states
+            if event.type == pygame.KEYDOWN:
+                if event.key in relevant_keys:
+                    pressed_keys.append(event.key)
+                elif event.key == 27:
+                    running = False
+            elif event.type == pygame.KEYUP:
+                if event.key in relevant_keys:
+                    pressed_keys.remove(event.key)
+            elif event.type == pygame.QUIT:
+                running = False
+            elif event.type == VIDEORESIZE:
+                video_size = event.size
+                screen = pygame.display.set_mode(video_size)
+                print(video_size)
+
+        pygame.display.flip()
+        clock.tick(fps)
+    pygame.quit()
+
+def play_runner(runner, transpose=True, fps=30, zoom=None, callback=None):
+    """Allows one to view the game as played by a Runner"""
+
+    #from pdb import set_trace
+    #set_trace()
+    assert(runner.nsteps==1)
+    env = runner.env
+
+    obs_s = env.observation_space
+    assert type(obs_s) == gym.spaces.box.Box
+    assert len(obs_s.shape) == 2 or (len(obs_s.shape) == 3 and obs_s.shape[2] in [1,3]) , "shape was {}".format(obs_s.shape)
+
+    if transpose:
+        video_size = env.observation_space.shape[1], env.observation_space.shape[0]
+    else:
+        video_size = env.observation_space.shape[0], env.observation_space.shape[1]
+
+    if zoom is not None:
+        video_size = int(video_size[0] * zoom), int(video_size[1] * zoom)
+
+    pressed_keys = []
+    running = True
+    env_done = True
+
+    screen = pygame.display.set_mode(video_size)
+    clock = pygame.time.Clock()
+    obs = None
+    while running:
+        #if env_done:
+        #    env_done = False
+        #    obs = env.reset()
+        #else:
+        prev_obs = obs
+        obs, states, rewards, masks, actions, values = runner.run()
+
+        obs = obs[0,:,:,-1]
+        from pdb import set_trace
+        #set_trace()
+        #obs, rew, env_done, info = env.step(action)
+        if callback is not None:
+            callback(prev_obs, obs, actions, rewards, masks, values)
+
         if obs is not None:
             if len(obs.shape) == 2:
                 obs = obs[:, :, None]
@@ -176,7 +252,7 @@ class PlayPlot(object):
         for i, plot in enumerate(self.cur_plot):
             if plot is not None:
                 plot.remove()
-            self.cur_plot[i] = self.ax[i].scatter(range(xmin, xmax), list(self.data[i]))
+            self.cur_plot[i] = self.ax[i].scatter(range(xmin, xmax), list(self.data[i]),color='k')
             self.ax[i].set_xlim(xmin, xmax)
         plt.pause(0.000001)
 
