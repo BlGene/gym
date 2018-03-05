@@ -9,6 +9,7 @@ try:
 except Exception:
     pass
 
+from pdb import set_trace
 
 #import pyglet.window as pw
 
@@ -81,8 +82,10 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
     """
 
     obs_s = env.observation_space
-    assert type(obs_s) == gym.spaces.box.Box
-    assert len(obs_s.shape) == 2 or (len(obs_s.shape) == 3 and obs_s.shape[2] in [1,3]) , "shape was {}".format(obs_s.shape)
+
+    if obs_s is not None:
+        assert type(obs_s) == gym.spaces.box.Box
+        assert len(obs_s.shape) == 2 or (len(obs_s.shape) == 3 and obs_s.shape[2] in [1,3]), "shape was {}".format(obs_s.shape)
 
     if policy:
         # don't require keys to action
@@ -97,20 +100,22 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
                           "please specify one manually"
         relevant_keys = set(sum(map(list, keys_to_action.keys()),[]))
 
-    if transpose:
-        video_size = env.observation_space.shape[1], env.observation_space.shape[0]
-    else:
-        video_size = env.observation_space.shape[0], env.observation_space.shape[1]
+    if obs_s is not None:
+        if transpose:
+            video_size = env.observation_space.shape[1], env.observation_space.shape[0]
+        else:
+            video_size = env.observation_space.shape[0], env.observation_space.shape[1]
 
-    if zoom is not None:
-        video_size = int(video_size[0] * zoom), int(video_size[1] * zoom)
+        if zoom is not None:
+            video_size = int(video_size[0] * zoom), int(video_size[1] * zoom)
+
+        screen = pygame.display.set_mode(video_size)
+        clock = pygame.time.Clock()
+
 
     pressed_keys = []
     running = True
     env_done = True
-
-    screen = pygame.display.set_mode(video_size)
-    clock = pygame.time.Clock()
 
     while running:
         if env_done:
@@ -125,6 +130,10 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
             obs, rew, env_done, info = env.step(action)
             if callback is not None:
                 callback(prev_obs, obs, action, rew, env_done, info)
+
+        if obs_s is None:
+            continue
+
         if obs is not None:
             if len(obs.shape) == 2:
                 obs = obs[:, :, None]
@@ -190,8 +199,6 @@ def play_runner(runner, transpose=True, fps=30, zoom=None, callback=None):
         obs, states, rewards, masks, actions, values = runner.run()
 
         obs = obs[0,:,:,-1]
-        from pdb import set_trace
-        #set_trace()
         #obs, rew, env_done, info = env.step(action)
         if callback is not None:
             callback(prev_obs, obs, actions, rewards, masks, values)
